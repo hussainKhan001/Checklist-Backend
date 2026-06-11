@@ -31,19 +31,9 @@ app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map(o => o.trim().replace(/\/$/, ''))
-  : ['http://localhost:5173', 'http://localhost:3000', 'checklist-frontend-lac.vercel.app'];
-
 app.use(cors({
-  origin: (origin, cb) => {
-    const normalised = origin ? origin.replace(/\/$/, '') : origin;
-    if (!normalised || allowedOrigins.includes(normalised) || !isProd) return cb(null, true);
-    cb(new Error(`CORS: origin ${origin} not allowed`));
-  },
+  origin: process.env.FRONTEND_URL,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // ── Compression + logging ─────────────────────────────────────────────────────
