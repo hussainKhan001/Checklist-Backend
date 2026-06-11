@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
-const auth = require('../middleware/auth');
+const asyncHandler = require('../middleware/asyncHandler');
 const requireAdmin = require('../middleware/requireAdmin');
 const Project = require('../models/Project');
 const Floor = require('../models/Floor');
@@ -10,252 +10,194 @@ const CheckPoint = require('../models/CheckPoint');
 const Inspection = require('../models/Inspection');
 const User = require('../models/User');
 
-router.use(auth, requireAdmin);
+router.use(requireAdmin);
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
-router.get('/stats', async (req, res) => {
-  try {
-    const [totalInspections, submitted, draft, totalProjects, totalTrades, totalUsers] =
-      await Promise.all([
-        Inspection.countDocuments(),
-        Inspection.countDocuments({ status: 'SUBMITTED' }),
-        Inspection.countDocuments({ status: 'DRAFT' }),
-        Project.countDocuments(),
-        Trade.countDocuments(),
-        User.countDocuments(),
-      ]);
-    res.json({ totalInspections, submitted, draft, totalProjects, totalTrades, totalUsers });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/stats', asyncHandler(async (_req, res) => {
+  const [totalInspections, submitted, draft, totalProjects, totalTrades, totalUsers] =
+    await Promise.all([
+      Inspection.countDocuments(),
+      Inspection.countDocuments({ status: 'SUBMITTED' }),
+      Inspection.countDocuments({ status: 'DRAFT' }),
+      Project.countDocuments(),
+      Trade.countDocuments(),
+      User.countDocuments(),
+    ]);
+  res.json({ totalInspections, submitted, draft, totalProjects, totalTrades, totalUsers });
+}));
 
 // ── Projects ──────────────────────────────────────────────────────────────────
-router.get('/projects', async (req, res) => {
-  try {
-    res.json(await Project.find().sort({ type: 1, name: 1 }));
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/projects', asyncHandler(async (_req, res) => {
+  res.json(await Project.find().sort({ type: 1, name: 1 }).lean());
+}));
 
-router.post('/projects', async (req, res) => {
-  try {
-    res.status(201).json(await Project.create(req.body));
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.post('/projects', asyncHandler(async (req, res) => {
+  res.status(201).json(await Project.create(req.body));
+}));
 
-router.put('/projects/:id', async (req, res) => {
-  try {
-    const project = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!project) return res.status(404).json({ message: 'Not found' });
-    res.json(project);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/projects/:id', asyncHandler(async (req, res) => {
+  const project = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!project) return res.status(404).json({ message: 'Project not found.' });
+  res.json(project);
+}));
 
-router.delete('/projects/:id', async (req, res) => {
-  try {
-    await Project.findByIdAndDelete(req.params.id);
-    await Promise.all([
-      Floor.deleteMany({ projectId: req.params.id }),
-      Location.deleteMany({ projectId: req.params.id }),
-      Inspection.deleteMany({ projectId: req.params.id }),
-    ]);
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/projects/:id', asyncHandler(async (req, res) => {
+  await Project.findByIdAndDelete(req.params.id);
+  await Promise.all([
+    Floor.deleteMany({ projectId: req.params.id }),
+    Location.deleteMany({ projectId: req.params.id }),
+    Inspection.deleteMany({ projectId: req.params.id }),
+  ]);
+  res.json({ message: 'Project deleted.' });
+}));
 
 // ── Floors ────────────────────────────────────────────────────────────────────
-router.get('/floors', async (req, res) => {
-  try {
-    const query = req.query.projectId ? { projectId: req.query.projectId } : {};
-    res.json(await Floor.find(query).populate('projectId', 'name').sort({ order: 1 }));
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/floors', asyncHandler(async (req, res) => {
+  const query = req.query.projectId ? { projectId: req.query.projectId } : {};
+  res.json(await Floor.find(query).populate('projectId', 'name').sort({ order: 1 }).lean());
+}));
 
-router.post('/floors', async (req, res) => {
-  try {
-    res.status(201).json(await Floor.create(req.body));
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.post('/floors', asyncHandler(async (req, res) => {
+  res.status(201).json(await Floor.create(req.body));
+}));
 
-router.put('/floors/:id', async (req, res) => {
-  try {
-    const floor = await Floor.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!floor) return res.status(404).json({ message: 'Not found' });
-    res.json(floor);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/floors/:id', asyncHandler(async (req, res) => {
+  const floor = await Floor.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!floor) return res.status(404).json({ message: 'Floor not found.' });
+  res.json(floor);
+}));
 
-router.delete('/floors/:id', async (req, res) => {
-  try {
-    await Floor.findByIdAndDelete(req.params.id);
-    await Location.deleteMany({ floorId: req.params.id });
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/floors/:id', asyncHandler(async (req, res) => {
+  await Floor.findByIdAndDelete(req.params.id);
+  await Location.deleteMany({ floorId: req.params.id });
+  res.json({ message: 'Floor deleted.' });
+}));
 
 // ── Locations ─────────────────────────────────────────────────────────────────
-router.get('/locations', async (req, res) => {
-  try {
-    const query = req.query.floorId ? { floorId: req.query.floorId } : {};
-    res.json(await Location.find(query).sort({ type: 1, name: 1 }));
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/locations', asyncHandler(async (req, res) => {
+  const query = req.query.floorId ? { floorId: req.query.floorId } : {};
+  res.json(await Location.find(query).sort({ type: 1, name: 1 }).lean());
+}));
 
-router.post('/locations', async (req, res) => {
-  try {
-    res.status(201).json(await Location.create(req.body));
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.post('/locations', asyncHandler(async (req, res) => {
+  res.status(201).json(await Location.create(req.body));
+}));
 
-router.put('/locations/:id', async (req, res) => {
-  try {
-    const loc = await Location.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!loc) return res.status(404).json({ message: 'Not found' });
-    res.json(loc);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/locations/:id', asyncHandler(async (req, res) => {
+  const loc = await Location.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!loc) return res.status(404).json({ message: 'Location not found.' });
+  res.json(loc);
+}));
 
-router.delete('/locations/:id', async (req, res) => {
-  try {
-    await Location.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/locations/:id', asyncHandler(async (req, res) => {
+  await Location.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Location deleted.' });
+}));
 
 // ── Trades ────────────────────────────────────────────────────────────────────
-router.get('/trades', async (req, res) => {
-  try {
-    res.json(await Trade.find().sort({ order: 1 }));
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/trades', asyncHandler(async (_req, res) => {
+  res.json(await Trade.find().sort({ order: 1 }).lean());
+}));
 
-router.post('/trades', async (req, res) => {
-  try {
-    res.status(201).json(await Trade.create(req.body));
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.post('/trades', asyncHandler(async (req, res) => {
+  res.status(201).json(await Trade.create(req.body));
+}));
 
-router.put('/trades/:id', async (req, res) => {
-  try {
-    const trade = await Trade.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!trade) return res.status(404).json({ message: 'Not found' });
-    res.json(trade);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/trades/:id', asyncHandler(async (req, res) => {
+  const trade = await Trade.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!trade) return res.status(404).json({ message: 'Trade not found.' });
+  res.json(trade);
+}));
 
-router.delete('/trades/:id', async (req, res) => {
-  try {
-    await Trade.findByIdAndDelete(req.params.id);
-    await CheckPoint.deleteMany({ tradeId: req.params.id });
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/trades/:id', asyncHandler(async (req, res) => {
+  await Trade.findByIdAndDelete(req.params.id);
+  await CheckPoint.deleteMany({ tradeId: req.params.id });
+  res.json({ message: 'Trade deleted.' });
+}));
 
 // ── CheckPoints ───────────────────────────────────────────────────────────────
-router.get('/checkpoints', async (req, res) => {
-  try {
-    const query = req.query.tradeId ? { tradeId: req.query.tradeId } : {};
-    res.json(await CheckPoint.find(query).populate('tradeId', 'name').sort({ order: 1 }));
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/checkpoints', asyncHandler(async (req, res) => {
+  const query = req.query.tradeId ? { tradeId: req.query.tradeId } : {};
+  res.json(await CheckPoint.find(query).populate('tradeId', 'name').sort({ order: 1 }).lean());
+}));
 
-router.post('/checkpoints', async (req, res) => {
-  try {
-    res.status(201).json(await CheckPoint.create(req.body));
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.post('/checkpoints', asyncHandler(async (req, res) => {
+  res.status(201).json(await CheckPoint.create(req.body));
+}));
 
-router.put('/checkpoints/:id', async (req, res) => {
-  try {
-    const cp = await CheckPoint.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!cp) return res.status(404).json({ message: 'Not found' });
-    res.json(cp);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/checkpoints/:id', asyncHandler(async (req, res) => {
+  const cp = await CheckPoint.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!cp) return res.status(404).json({ message: 'CheckPoint not found.' });
+  res.json(cp);
+}));
 
-router.delete('/checkpoints/:id', async (req, res) => {
-  try {
-    await CheckPoint.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/checkpoints/:id', asyncHandler(async (req, res) => {
+  await CheckPoint.findByIdAndDelete(req.params.id);
+  res.json({ message: 'CheckPoint deleted.' });
+}));
 
 // ── Inspections ───────────────────────────────────────────────────────────────
-router.get('/inspections', async (req, res) => {
-  try {
-    const query = req.query.status ? { status: req.query.status } : {};
-    const inspections = await Inspection.find(query)
-      .populate('projectId', 'name')
-      .populate('floorId', 'code label')
-      .populate('locationId', 'name')
-      .populate('tradeId', 'name')
-      .sort({ createdAt: -1 });
-    res.json(inspections);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/inspections', asyncHandler(async (req, res) => {
+  const query = req.query.status ? { status: req.query.status } : {};
+  res.json(await Inspection.find(query)
+    .populate('projectId', 'name')
+    .populate('floorId', 'code label')
+    .populate('locationId', 'name')
+    .populate('tradeId', 'name')
+    .sort({ createdAt: -1 })
+    .lean());
+}));
 
-router.get('/inspections/:id', async (req, res) => {
-  try {
-    const inspection = await Inspection.findById(req.params.id)
-      .populate('projectId')
-      .populate('floorId')
-      .populate('locationId')
-      .populate('tradeId')
-      .populate('results.checkPointId');
-    if (!inspection) return res.status(404).json({ message: 'Not found' });
-    res.json(inspection);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/inspections/:id', asyncHandler(async (req, res) => {
+  const inspection = await Inspection.findById(req.params.id)
+    .populate('projectId')
+    .populate('floorId')
+    .populate('locationId')
+    .populate('tradeId')
+    .populate('results.checkPointId');
+  if (!inspection) return res.status(404).json({ message: 'Inspection not found.' });
+  res.json(inspection);
+}));
 
-router.put('/inspections/:id', async (req, res) => {
-  try {
-    const inspection = await Inspection.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!inspection) return res.status(404).json({ message: 'Not found' });
-    res.json(inspection);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/inspections/:id', asyncHandler(async (req, res) => {
+  const inspection = await Inspection.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!inspection) return res.status(404).json({ message: 'Inspection not found.' });
+  res.json(inspection);
+}));
 
-router.delete('/inspections/:id', async (req, res) => {
-  try {
-    await Inspection.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/inspections/:id', asyncHandler(async (req, res) => {
+  await Inspection.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Inspection deleted.' });
+}));
 
 // ── Users ─────────────────────────────────────────────────────────────────────
-router.get('/users', async (req, res) => {
-  try {
-    res.json(await User.find().select('-password').sort({ createdAt: -1 }));
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.get('/users', asyncHandler(async (_req, res) => {
+  res.json(await User.find().sort({ createdAt: -1 }).lean());
+}));
 
-router.post('/users', async (req, res) => {
-  try {
-    const user = await User.create(req.body);
-    res.status(201).json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.post('/users', asyncHandler(async (req, res) => {
+  const user = await User.create(req.body);
+  res.status(201).json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
+}));
 
-router.put('/users/:id', async (req, res) => {
-  try {
-    const updates = { ...req.body };
-    if (updates.password) {
-      updates.password = await bcrypt.hash(updates.password, 10);
-    } else {
-      delete updates.password;
-    }
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
-    if (!user) return res.status(404).json({ message: 'Not found' });
-    res.json(user);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
+router.put('/users/:id', asyncHandler(async (req, res) => {
+  const updates = { ...req.body };
+  if (updates.password) {
+    updates.password = await bcrypt.hash(updates.password, parseInt(process.env.BCRYPT_ROUNDS) || 12);
+  } else {
+    delete updates.password;
+  }
+  const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+  if (!user) return res.status(404).json({ message: 'User not found.' });
+  res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
+}));
 
-router.delete('/users/:id', async (req, res) => {
-  try {
-    if (req.user._id.toString() === req.params.id) {
-      return res.status(400).json({ message: 'Cannot delete your own account' });
-    }
-    await User.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+router.delete('/users/:id', asyncHandler(async (req, res) => {
+  if (req.user._id.toString() === req.params.id) {
+    return res.status(400).json({ message: 'Cannot delete your own account.' });
+  }
+  await User.findByIdAndDelete(req.params.id);
+  res.json({ message: 'User deleted.' });
+}));
 
 module.exports = router;
