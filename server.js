@@ -31,8 +31,18 @@ app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+// FRONTEND_URL can be comma-separated: "http://localhost:5173,https://app.vercel.app"
+// cors `origin` must be a function — passing the raw string sends ALL values in one
+// header which browsers reject (Access-Control-Allow-Origin only allows one value).
+const allowedOrigins = (process.env.FRONTEND_URL || 'https://checklist-backend-1-6g7s.onrender.com')
+  .split(',').map(o => o.trim().replace(/\/$/, ''));
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : false,
+  origin: (origin, cb) => {
+    // allow server-to-server requests (no origin) and listed origins
+    if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) return cb(null, true);
+    cb(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true,
 }));
 
