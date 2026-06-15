@@ -85,6 +85,7 @@ app.use('/api/auth', authLimiter, require('./routes/auth'));
 app.use('/api/projects', apiLimiter, require('./routes/projects'));
 app.use('/api/floors', apiLimiter, require('./routes/floors'));
 app.use('/api/locations', apiLimiter, require('./routes/locations'));
+app.use('/api/elements',  apiLimiter, require('./routes/elements'));
 app.use('/api/trades', apiLimiter, require('./routes/trades'));
 app.use('/api/checkpoints', apiLimiter, require('./routes/checkpoints'));
 app.use('/api/inspections', apiLimiter, require('./routes/inspections'));

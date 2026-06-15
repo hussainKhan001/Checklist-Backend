@@ -21,6 +21,11 @@ router.post('/locations', admin.createLocation);
 router.put('/locations/:id', admin.updateLocation);
 router.delete('/locations/:id', admin.deleteLocation);
 
+router.get('/elements', admin.getElements);
+router.post('/elements', admin.createElement);
+router.put('/elements/:id', admin.updateElement);
+router.delete('/elements/:id', admin.deleteElement);
+
 router.get('/trades', admin.getTrades);
 router.post('/trades', admin.createTrade);
 router.put('/trades/:id', admin.updateTrade);

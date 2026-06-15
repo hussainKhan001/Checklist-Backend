@@ -3,6 +3,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const Project = require('../models/Project');
 const Floor = require('../models/Floor');
 const Location = require('../models/Location');
+const Element = require('../models/Element');
 const Trade = require('../models/Trade');
 const CheckPoint = require('../models/CheckPoint');
 const Inspection = require('../models/Inspection');
@@ -66,6 +67,7 @@ exports.updateFloor = asyncHandler(async (req, res) => {
 exports.deleteFloor = asyncHandler(async (req, res) => {
   await Floor.findByIdAndDelete(req.params.id);
   await Location.deleteMany({ floorId: req.params.id });
+  await Element.deleteMany({ floorId: req.params.id });
   res.json({ message: 'Floor deleted.' });
 });
 
@@ -87,7 +89,29 @@ exports.updateLocation = asyncHandler(async (req, res) => {
 
 exports.deleteLocation = asyncHandler(async (req, res) => {
   await Location.findByIdAndDelete(req.params.id);
+  await Element.deleteMany({ locationId: req.params.id });
   res.json({ message: 'Location deleted.' });
+});
+
+// ── Elements ──────────────────────────────────────────────────────────────────
+exports.getElements = asyncHandler(async (req, res) => {
+  const query = req.query.locationId ? { locationId: req.query.locationId } : {};
+  res.json(await Element.find(query).sort({ type: 1, order: 1 }).lean());
+});
+
+exports.createElement = asyncHandler(async (req, res) => {
+  res.status(201).json(await Element.create(req.body));
+});
+
+exports.updateElement = asyncHandler(async (req, res) => {
+  const el = await Element.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!el) return res.status(404).json({ message: 'Element not found.' });
+  res.json(el);
+});
+
+exports.deleteElement = asyncHandler(async (req, res) => {
+  await Element.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Element deleted.' });
 });
 
 // ── Trades ────────────────────────────────────────────────────────────────────
@@ -139,6 +163,7 @@ exports.getInspections = asyncHandler(async (req, res) => {
     .populate('projectId', 'name')
     .populate('floorId', 'code label')
     .populate('locationId', 'name')
+    .populate('elementId', 'name type')
     .populate('tradeId', 'name')
     .sort({ createdAt: -1 })
     .lean());
