@@ -110,13 +110,20 @@ exports.updateElement = asyncHandler(async (req, res) => {
 });
 
 exports.deleteElement = asyncHandler(async (req, res) => {
+  const elementTrades = await Trade.find({ elementId: req.params.id }, '_id').lean();
+  const tradeIds = elementTrades.map(t => t._id);
+  if (tradeIds.length) await CheckPoint.deleteMany({ tradeId: { $in: tradeIds } });
+  await Trade.deleteMany({ elementId: req.params.id });
   await Element.findByIdAndDelete(req.params.id);
   res.json({ message: 'Element deleted.' });
 });
 
 // ── Trades ────────────────────────────────────────────────────────────────────
-exports.getTrades = asyncHandler(async (_req, res) => {
-  res.json(await Trade.find().sort({ order: 1 }).lean());
+exports.getTrades = asyncHandler(async (req, res) => {
+  const query = req.query.elementId
+    ? { elementId: req.query.elementId }
+    : { $or: [{ elementId: null }, { elementId: { $exists: false } }] };
+  res.json(await Trade.find(query).sort({ order: 1 }).lean());
 });
 
 exports.createTrade = asyncHandler(async (req, res) => {

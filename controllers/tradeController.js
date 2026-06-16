@@ -1,8 +1,11 @@
 const asyncHandler = require('../middleware/asyncHandler');
 const Trade = require('../models/Trade');
 
-exports.getAll = asyncHandler(async (_req, res) => {
-  res.json(await Trade.find().sort({ order: 1 }).lean());
+exports.getAll = asyncHandler(async (req, res) => {
+  const query = req.query.elementId
+    ? { elementId: req.query.elementId }
+    : { $or: [{ elementId: null }, { elementId: { $exists: false } }] };
+  res.json(await Trade.find(query).sort({ order: 1 }).lean());
 });
 
 exports.getOne = asyncHandler(async (req, res) => {
