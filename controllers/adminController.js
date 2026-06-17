@@ -4,6 +4,7 @@ const Project = require('../models/Project');
 const Floor = require('../models/Floor');
 const Location = require('../models/Location');
 const Element = require('../models/Element');
+const TradeElement = require('../models/TradeElement');
 const Trade = require('../models/Trade');
 const CheckPoint = require('../models/CheckPoint');
 const Inspection = require('../models/Inspection');
@@ -114,8 +115,37 @@ exports.deleteElement = asyncHandler(async (req, res) => {
   const tradeIds = elementTrades.map(t => t._id);
   if (tradeIds.length) await CheckPoint.deleteMany({ tradeId: { $in: tradeIds } });
   await Trade.deleteMany({ elementId: req.params.id });
+  await TradeElement.deleteMany({ elementId: req.params.id });
   await Element.findByIdAndDelete(req.params.id);
   res.json({ message: 'Element deleted.' });
+});
+
+// ── TradeElements (eligible element assignments per trade) ─────────────────────
+exports.getTradeElements = asyncHandler(async (req, res) => {
+  const query = {};
+  if (req.query.tradeId) query.tradeId = req.query.tradeId;
+  if (req.query.locationId) {
+    const elemIds = await Element.find({ locationId: req.query.locationId }).distinct('_id');
+    query.elementId = { $in: elemIds };
+  } else if (req.query.elementId) {
+    query.elementId = req.query.elementId;
+  }
+  const items = await TradeElement.find(query)
+    .populate({ path: 'elementId', populate: [{ path: 'locationId', select: 'name' }, { path: 'floorId', select: 'label' }, { path: 'projectId', select: 'name' }] })
+    .populate('tradeId', 'name')
+    .sort({ createdAt: 1 })
+    .lean();
+  res.json(items);
+});
+
+exports.createTradeElement = asyncHandler(async (req, res) => {
+  const te = await TradeElement.create(req.body);
+  res.status(201).json(te);
+});
+
+exports.deleteTradeElement = asyncHandler(async (req, res) => {
+  await TradeElement.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Assignment removed.' });
 });
 
 // ── Trades ────────────────────────────────────────────────────────────────────
@@ -139,6 +169,7 @@ exports.updateTrade = asyncHandler(async (req, res) => {
 exports.deleteTrade = asyncHandler(async (req, res) => {
   await Trade.findByIdAndDelete(req.params.id);
   await CheckPoint.deleteMany({ tradeId: req.params.id });
+  await TradeElement.deleteMany({ tradeId: req.params.id });
   res.json({ message: 'Trade deleted.' });
 });
 

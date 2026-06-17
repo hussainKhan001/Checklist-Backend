@@ -26,6 +26,10 @@ router.post('/elements', admin.createElement);
 router.put('/elements/:id', admin.updateElement);
 router.delete('/elements/:id', admin.deleteElement);
 
+router.get('/trade-elements', admin.getTradeElements);
+router.post('/trade-elements', admin.createTradeElement);
+router.delete('/trade-elements/:id', admin.deleteTradeElement);
+
 router.get('/trades', admin.getTrades);
 router.post('/trades', admin.createTrade);
 router.put('/trades/:id', admin.updateTrade);
