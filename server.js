@@ -21,7 +21,7 @@ if (missing.length) {
 
 const isProd = process.env.NODE_ENV === 'production';
 
-connectDB();
+connectDB().then(() => require('./utils/seedRoles')());
 
 const app = express();
 
@@ -58,14 +58,6 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(mongoSanitize());
 
 // ── Rate limits ───────────────────────────────────────────────────────────────
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { message: 'Too many login attempts. Please try again after 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -81,7 +73,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/health', (_req, res) => res.json({ status: 'ok', env: process.env.NODE_ENV || 'development' }));
 
 // ── API routes ────────────────────────────────────────────────────────────────
-app.use('/api/auth', authLimiter, require('./routes/auth'));
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projects', apiLimiter, require('./routes/projects'));
 app.use('/api/floors', apiLimiter, require('./routes/floors'));
 app.use('/api/locations', apiLimiter, require('./routes/locations'));

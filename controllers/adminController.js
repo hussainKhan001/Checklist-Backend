@@ -247,6 +247,12 @@ exports.updateUser = asyncHandler(async (req, res) => {
   } else {
     delete updates.password;
   }
+  // Normalize role to array (findByIdAndUpdate bypasses Mongoose setters)
+  if (updates.role !== undefined) {
+    const arr = Array.isArray(updates.role) ? updates.role : [updates.role];
+    updates.role = [...new Set(arr.map(r => String(r).toLowerCase().trim()).filter(Boolean))];
+    if (updates.role.length === 0) updates.role = ['user'];
+  }
   const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
   if (!user) return res.status(404).json({ message: 'User not found.' });
   res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
