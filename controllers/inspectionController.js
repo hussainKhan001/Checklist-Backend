@@ -5,11 +5,16 @@ exports.getAll = asyncHandler(async (req, res) => {
   const query = {};
   if (req.query.locationId) query.locationId = req.query.locationId;
   if (req.query.tradeId)    query.tradeId    = req.query.tradeId;
+  if (req.query.elementId)  query.elementId  = req.query.elementId;
+  if (req.query.status)     query.status     = req.query.status;
+
   res.json(await Inspection.find(query)
     .populate('projectId', 'name')
     .populate('floorId', 'code label')
     .populate('locationId', 'name')
+    .populate('elementId', 'name')
     .populate('tradeId', 'name')
+    .populate('results.checkPointId', 'title order')
     .sort({ dateOfCheck: -1 })
     .lean());
 });
@@ -68,6 +73,25 @@ exports.submit = asyncHandler(async (req, res) => {
   }
 
   await inspection.save();
+
+  // Clean up any stale DRAFTs for the same wall on the same date.
+  // A race between auto-save (creates DRAFT A) and handleSubmit (creates+submits DRAFT B)
+  // can leave DRAFT A in the DB. That draft would be found first on the next form open
+  // and would shadow the submitted data with potentially incomplete results.
+  try {
+    const ds = new Date(inspection.dateOfCheck); ds.setUTCHours(0,  0,  0,   0)
+    const de = new Date(inspection.dateOfCheck); de.setUTCHours(23, 59, 59, 999)
+    const q  = {
+      _id:         { $ne: inspection._id },
+      locationId:  inspection.locationId,
+      tradeId:     inspection.tradeId,
+      status:      'DRAFT',
+      dateOfCheck: { $gte: ds, $lte: de },
+    }
+    if (inspection.elementId) q.elementId = inspection.elementId
+    await Inspection.deleteMany(q)
+  } catch (_) { /* non-critical — don't fail the submission */ }
+
   res.json(inspection);
 });
 
@@ -82,7 +106,9 @@ exports.getDraft = asyncHandler(async (req, res) => {
   const query = { locationId, tradeId, status: 'DRAFT', dateOfCheck: { $gte: start, $lte: end } };
   if (elementId && elementId !== 'undefined' && elementId !== 'null' && elementId !== '') query.elementId = elementId;
 
-  const draft = await Inspection.findOne(query).sort({ updatedAt: -1 });
+  const draft = await Inspection.findOne(query)
+    .populate('results.checkPointId', 'title order')
+    .sort({ updatedAt: -1 });
   if (!draft) return res.json({ found: false });
   res.json({ found: true, inspection: draft });
 });

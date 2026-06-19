@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema({
   name:     { type: String, required: true },
   email:    { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, select: false },
+  avatar:   { type: String, default: '' },
 
   // Array — a user can hold multiple roles; permissions are merged at auth time
   role: {

@@ -8,9 +8,6 @@ const can = (perm) => (req, res, next) => {
   next();
 };
 
-// Every admin route requires admin_access as the base gate
-router.use(can('admin_access'));
-
 // ── Stats (dashboard) — requires view_dashboard ───────────────────────────────
 router.get('/stats', can('view_dashboard'), admin.getStats);
 
@@ -68,7 +65,7 @@ router.put('/users/:id',    can('manage_users'),  admin.updateUser);
 router.delete('/users/:id', can('manage_users'),  admin.deleteUser);
 
 // ── Roles & Permissions ───────────────────────────────────────────────────────
-router.get('/roles',        roles.getRoles);  // readable by any admin_access user
+router.get('/roles',        can('manage_roles'),  roles.getRoles);
 router.post('/roles',       can('manage_roles'),  roles.createRole);
 router.put('/roles/:id',    can('manage_roles'),  roles.updateRole);
 router.delete('/roles/:id', can('manage_roles'),  roles.deleteRole);

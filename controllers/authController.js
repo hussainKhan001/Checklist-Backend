@@ -36,6 +36,40 @@ exports.login = asyncHandler(async (req, res) => {
 });
 
 exports.getMe = (req, res) => {
-  const { _id, name, email, role } = req.user;
-  res.json({ _id, name, email, role, permissions: [...req.permissions] });
+  const { _id, name, email, role, avatar } = req.user;
+  res.json({ _id, name, email, role, avatar, permissions: [...req.permissions] });
 };
+
+exports.updateProfile = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim())
+    return res.status(400).json({ message: 'Name is required.' });
+  const user = await User.findByIdAndUpdate(
+    req.user._id, { name: name.trim() }, { new: true }
+  );
+  res.json({ name: user.name });
+});
+
+exports.updatePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ message: 'Both fields are required.' });
+  if (newPassword.length < 6)
+    return res.status(400).json({ message: 'New password must be at least 6 characters.' });
+
+  const user = await User.findById(req.user._id).select('+password');
+  if (!(await user.comparePassword(currentPassword)))
+    return res.status(400).json({ message: 'Current password is incorrect.' });
+
+  user.password = newPassword;
+  await user.save();
+  res.json({ message: 'Password updated successfully.' });
+});
+
+exports.updateAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+  const user = await User.findByIdAndUpdate(
+    req.user._id, { avatar: req.file.path }, { new: true }
+  );
+  res.json({ avatar: user.avatar });
+});
