@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const admin  = require('../controllers/adminController');
 const roles  = require('../controllers/roleController');
+const matrix = require('../controllers/matrixController');
 
 // Inline permission guard — uses req.can() attached by auth middleware
 const can = (perm) => (req, res, next) => {
@@ -10,6 +11,9 @@ const can = (perm) => (req, res, next) => {
 
 // ── Stats (dashboard) — requires view_dashboard ───────────────────────────────
 router.get('/stats', can('view_dashboard'), admin.getStats);
+
+// ── Wall Matrix ───────────────────────────────────────────────────────────────
+router.get('/matrix', can('view_inspections'), matrix.getMatrix);
 
 // ── Inspections ───────────────────────────────────────────────────────────────
 router.get('/inspections',        can('view_inspections'),  admin.getInspections);
