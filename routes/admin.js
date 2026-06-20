@@ -1,7 +1,8 @@
-const router = require('express').Router();
-const admin  = require('../controllers/adminController');
-const roles  = require('../controllers/roleController');
-const matrix = require('../controllers/matrixController');
+const router   = require('express').Router();
+const admin    = require('../controllers/adminController');
+const roles    = require('../controllers/roleController');
+const matrix   = require('../controllers/matrixController');
+const progress = require('../controllers/progressController');
 
 // Inline permission guard — uses req.can() attached by auth middleware
 const can = (perm) => (req, res, next) => {
@@ -73,5 +74,15 @@ router.get('/roles',        can('manage_roles'),  roles.getRoles);
 router.post('/roles',       can('manage_roles'),  roles.createRole);
 router.put('/roles/:id',    can('manage_roles'),  roles.updateRole);
 router.delete('/roles/:id', can('manage_roles'),  roles.deleteRole);
+
+// ── Site Progress ─────────────────────────────────────────────────────────────
+router.get('/progress/summary',           can('view_inspections'), progress.getSummary);
+router.get('/progress/plans',             can('view_inspections'), progress.getPlans);
+router.put('/progress/plans',             can('manage_inspections'), progress.upsertPlan);
+router.delete('/progress/plans/:id',      can('manage_inspections'), progress.deletePlan);
+router.get('/progress/milestones',        can('view_inspections'), progress.getMilestones);
+router.post('/progress/milestones',       can('manage_inspections'), progress.createMilestone);
+router.put('/progress/milestones/:id',    can('manage_inspections'), progress.updateMilestone);
+router.delete('/progress/milestones/:id', can('manage_inspections'), progress.deleteMilestone);
 
 module.exports = router;

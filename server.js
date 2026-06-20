@@ -69,8 +69,8 @@ const apiLimiter = rateLimit({
 // ── Static uploads ────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ── Health check ──────────────────────────────────────────────────────────────
-app.get('/health', (_req, res) => res.json({ status: 'ok', env: process.env.NODE_ENV || 'development' }));
+// ── Health check (also handles GET / for hosting-platform probes) ─────────────
+app.get(['/', '/health'], (_req, res) => res.json({ status: 'ok', app: 'Neoteric QC API', env: process.env.NODE_ENV || 'development' }));
 
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
