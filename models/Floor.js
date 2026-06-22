@@ -6,6 +6,7 @@ const floorSchema = new mongoose.Schema({
   label: { type: String, required: true },
   order: { type: Number, default: 0 },
   isProjectLevel: { type: Boolean, default: false },
+  mapImage: String,
 }, { timestamps: true });
 
 module.exports = mongoose.model('Floor', floorSchema);

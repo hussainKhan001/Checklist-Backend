@@ -14,7 +14,8 @@ const can = (perm) => (req, res, next) => {
 router.get('/stats', can('view_dashboard'), admin.getStats);
 
 // ── Wall Matrix ───────────────────────────────────────────────────────────────
-router.get('/matrix', can('view_inspections'), matrix.getMatrix);
+router.get('/matrix',         can('view_inspections'), matrix.getMatrix);
+router.get('/project-matrix', can('view_inspections'), matrix.getProjectMatrix);
 
 // ── Inspections ───────────────────────────────────────────────────────────────
 router.get('/inspections',        can('view_inspections'),  admin.getInspections);

@@ -5,6 +5,7 @@ const Trade = require('../models/Trade');
 const TradeElement = require('../models/TradeElement');
 const CheckPoint = require('../models/CheckPoint');
 const Inspection = require('../models/Inspection');
+const Floor = require('../models/Floor');
 
 // elements = [{ elementId: ObjectId, _elem: Element }]
 // inspections = submitted inspections for this room+trade
@@ -183,9 +184,25 @@ exports.getMatrix = asyncHandler(async (req, res) => {
         };
       });
 
+      // Per-checkpoint aggregate across all walls in this room
+      const cpStatuses = {};
+      if (roomInspections.length > 0) {
+        tradeCps.forEach(cp => {
+          const cpId = String(cp._id);
+          const cpResults = roomInspections
+            .flatMap(ins => ins.results || [])
+            .filter(r => String(r.checkPointId) === cpId);
+          if (cpResults.length === 0)                         cpStatuses[cpId] = 'PENDING';
+          else if (cpResults.some(r => r.result === 'NOT_OK')) cpStatuses[cpId] = 'NOT_OK';
+          else if (cpResults.every(r => r.result === 'OK'))    cpStatuses[cpId] = 'OK';
+          else                                                 cpStatuses[cpId] = 'PENDING';
+        });
+      }
+
       tradeStatuses[tid] = {
         status,
         walls,
+        cpStatuses,
         totalWalls: wallAssignments.length,
         submittedWalls: walls.filter(w => w.submitted).length,
         notOkWalls: walls.filter(w => w.wallStatus === 'not_ok').length,
@@ -201,7 +218,107 @@ exports.getMatrix = asyncHandler(async (req, res) => {
       name: t.name,
       order: t.order,
       isRecurring: t.isRecurring || false,
+      checkpoints: (cpsByTrade[String(t._id)] || [])
+        .slice().sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(cp => ({ _id: cp._id, title: cp.title, order: cp.order })),
     })),
     rooms: resultRows,
+  });
+});
+
+// ── Project-wide overview matrix (all floors × all trades) ────────────────────
+exports.getProjectMatrix = asyncHandler(async (req, res) => {
+  const { projectId } = req.query;
+  if (!projectId) return res.status(400).json({ message: 'projectId is required.' });
+
+  const floors = await Floor.find({ projectId }).sort({ order: 1, label: 1 }).lean();
+  if (!floors.length) return res.json({ trades: [], floors: [] });
+
+  const floorIds = floors.map(f => f._id);
+  const rooms    = await Location.find({ floorId: { $in: floorIds } }).sort({ type: 1, name: 1 }).lean();
+  if (!rooms.length) return res.json({ trades: [], floors: floors.map(f => ({ _id: f._id, label: f.label, rooms: [] })) });
+
+  const locationIds  = rooms.map(r => r._id);
+  const elements     = await Element.find({ locationId: { $in: locationIds } }).lean();
+  const elementIds   = elements.map(e => e._id);
+  const elemById     = Object.fromEntries(elements.map(e => [String(e._id), e]));
+
+  const tradeElements = elementIds.length
+    ? await TradeElement.find({ elementId: { $in: elementIds } }).lean()
+    : [];
+
+  const wallsByCell = {};
+  tradeElements.forEach(te => {
+    const eid  = String(te.elementId);
+    const tid  = String(te.tradeId);
+    const elem = elemById[eid];
+    if (!elem) return;
+    const lid = String(elem.locationId);
+    const key = `${tid}:${lid}`;
+    if (!wallsByCell[key]) wallsByCell[key] = [];
+    if (!wallsByCell[key].some(w => String(w.elementId) === eid))
+      wallsByCell[key].push({ elementId: te.elementId, _elem: elem });
+  });
+
+  const tradeIds = [...new Set(tradeElements.map(te => String(te.tradeId)))];
+  const trades   = tradeIds.length
+    ? await Trade.find({ _id: { $in: tradeIds }, isHidden: { $ne: true } }).sort({ order: 1, name: 1 }).lean()
+    : [];
+
+  const allTids    = trades.map(t => t._id);
+  const checkpoints = await CheckPoint.find({ tradeId: { $in: allTids }, isHidden: { $ne: true } }).lean();
+  const cpsByTrade  = {};
+  checkpoints.forEach(cp => {
+    const tid = String(cp.tradeId);
+    if (!cpsByTrade[tid]) cpsByTrade[tid] = [];
+    cpsByTrade[tid].push(cp);
+  });
+
+  const inspections = await Inspection.find({ projectId, status: 'SUBMITTED' }).lean();
+  const inspByCell  = {};
+  [...inspections]
+    .sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt))
+    .forEach(ins => {
+      const lid = String(ins.locationId);
+      const tid = String(ins.tradeId);
+      const key = `${lid}:${tid}`;
+      if (!inspByCell[key]) inspByCell[key] = [];
+      if (ins.elementId) {
+        const eid = String(ins.elementId);
+        if (!inspByCell[key].some(ex => ex.elementId && String(ex.elementId) === eid))
+          inspByCell[key].push(ins);
+      } else {
+        inspByCell[key].push(ins);
+      }
+    });
+
+  const roomsByFloor = {};
+  floors.forEach(f => { roomsByFloor[String(f._id)] = []; });
+
+  rooms.forEach(room => {
+    const fid = String(room.floorId);
+    const lid = String(room._id);
+    const tradeStatuses = {};
+
+    trades.forEach(trade => {
+      const tid            = String(trade._id);
+      const wallAssignments = wallsByCell[`${tid}:${lid}`] || [];
+      const roomInspections = inspByCell[`${lid}:${tid}`]  || [];
+      const tradeCps        = cpsByTrade[tid]               || [];
+      tradeStatuses[tid]    = computeCellStatus(wallAssignments, roomInspections, tradeCps);
+    });
+
+    const vals         = Object.values(tradeStatuses);
+    const doneCount    = vals.filter(s => s === 'DONE').length;
+    const totalActive  = vals.filter(s => s !== 'NA').length;
+
+    if (roomsByFloor[fid]) {
+      roomsByFloor[fid].push({ _id: room._id, name: room.name, type: room.type, tradeStatuses, doneCount, totalActive });
+    }
+  });
+
+  res.json({
+    trades: trades.map(t => ({ _id: t._id, name: t.name, order: t.order })),
+    floors: floors.map(f => ({ _id: f._id, label: f.label, rooms: roomsByFloor[String(f._id)] || [] })),
   });
 });

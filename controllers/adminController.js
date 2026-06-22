@@ -196,11 +196,13 @@ exports.deleteCheckPoint = asyncHandler(async (req, res) => {
 
 // ── Inspections ───────────────────────────────────────────────────────────────
 exports.getInspections = asyncHandler(async (req, res) => {
-  const { status, projectId, floorId, includeResults } = req.query;
+  const { status, projectId, floorId, locationId, tradeId, includeResults } = req.query;
   const query = {};
-  if (status)    query.status    = status;
-  if (projectId) query.projectId = projectId;
-  if (floorId)   query.floorId   = floorId;
+  if (status)     query.status     = status;
+  if (projectId)  query.projectId  = projectId;
+  if (floorId)    query.floorId    = floorId;
+  if (locationId) query.locationId = locationId;
+  if (tradeId)    query.tradeId    = tradeId;
 
   let q = Inspection.find(query)
     .populate('projectId', 'name')
