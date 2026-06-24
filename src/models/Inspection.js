@@ -8,9 +8,10 @@ const resultSchema = new mongoose.Schema({
 });
 
 const timelineSchema = new mongoose.Schema({
-  event: { type: String, enum: ['DRAFT_CREATED', 'PHOTO_UPLOADED', 'SUBMITTED'], required: true },
+  event: { type: String, enum: ['DRAFT_CREATED', 'PHOTO_UPLOADED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'REOPENED'], required: true },
   timestamp: { type: Date, default: Date.now },
   details: { type: String, default: '' },
+  by: { type: String, default: '' },
 }, { _id: false });
 
 const inspectionSchema = new mongoose.Schema({
@@ -24,8 +25,11 @@ const inspectionSchema = new mongoose.Schema({
   contractorAgency: String,
   checkedBy:        String,
   results:          [resultSchema],
-  status:           { type: String, enum: ['DRAFT', 'SUBMITTED'], default: 'DRAFT' },
+  status:           { type: String, enum: ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'], default: 'DRAFT' },
   submittedAt:      { type: Date, default: null },
+  approvedAt:       { type: Date, default: null },
+  reviewedBy:       { type: String, default: '' },
+  reviewNotes:      { type: String, default: '' },
   timeline:         { type: [timelineSchema], default: [] },
 }, { timestamps: true });
 

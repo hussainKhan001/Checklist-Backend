@@ -18,10 +18,12 @@ router.get('/matrix',         can('view_inspections'), matrix.getMatrix);
 router.get('/project-matrix', can('view_inspections'), matrix.getProjectMatrix);
 
 // ── Inspections ───────────────────────────────────────────────────────────────
-router.get('/inspections',        can('view_inspections'),  admin.getInspections);
-router.get('/inspections/:id',    can('view_inspections'),  admin.getInspection);
-router.put('/inspections/:id',    can('manage_inspections'), admin.updateInspection);
-router.delete('/inspections/:id', can('manage_inspections'), admin.deleteInspection);
+router.get('/inspections',                  can('view_inspections'),    admin.getInspections);
+router.get('/inspections/:id',              can('view_inspections'),    admin.getInspection);
+router.put('/inspections/:id',              can('manage_inspections'),  admin.updateInspection);
+router.post('/inspections/:id/approve',     can('manage_inspections'),  admin.approveInspection);
+router.post('/inspections/:id/reject',      can('manage_inspections'),  admin.rejectInspection);
+router.delete('/inspections/:id',           can('manage_inspections'),  admin.deleteInspection);
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 router.get('/projects',        can('view_projects'),    admin.getProjects);

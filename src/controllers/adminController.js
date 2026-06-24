@@ -244,6 +244,41 @@ exports.deleteInspection = asyncHandler(async (req, res) => {
   res.json({ message: 'Inspection deleted.' });
 });
 
+exports.approveInspection = asyncHandler(async (req, res) => {
+  const { reviewNotes } = req.body;
+  const reviewedBy = req.user?.name || req.user?.email || 'Admin';
+  const inspection = await Inspection.findByIdAndUpdate(
+    req.params.id,
+    {
+      status: 'APPROVED',
+      approvedAt: new Date(),
+      reviewedBy,
+      reviewNotes: reviewNotes || '',
+      $push: { timeline: { event: 'APPROVED', by: reviewedBy, details: reviewNotes || '' } },
+    },
+    { new: true, runValidators: true }
+  ).populate('projectId').populate('floorId').populate('locationId').populate('elementId','name type').populate('tradeId').populate('results.checkPointId');
+  if (!inspection) return res.status(404).json({ message: 'Inspection not found.' });
+  res.json(inspection);
+});
+
+exports.rejectInspection = asyncHandler(async (req, res) => {
+  const { reviewNotes } = req.body;
+  const reviewedBy = req.user?.name || req.user?.email || 'Admin';
+  const inspection = await Inspection.findByIdAndUpdate(
+    req.params.id,
+    {
+      status: 'REJECTED',
+      reviewedBy,
+      reviewNotes: reviewNotes || '',
+      $push: { timeline: { event: 'REJECTED', by: reviewedBy, details: reviewNotes || '' } },
+    },
+    { new: true, runValidators: true }
+  ).populate('projectId').populate('floorId').populate('locationId').populate('elementId','name type').populate('tradeId').populate('results.checkPointId');
+  if (!inspection) return res.status(404).json({ message: 'Inspection not found.' });
+  res.json(inspection);
+});
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 exports.getUsers = asyncHandler(async (_req, res) => {
   res.json(await User.find().sort({ createdAt: -1 }).lean());

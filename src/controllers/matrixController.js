@@ -177,6 +177,7 @@ exports.getMatrix = asyncHandler(async (req, res) => {
           elementId: wa.elementId,
           name: wa._elem?.name || String(wa.elementId),
           submitted: !!wallInsp,
+          submittedAt: wallInsp ? (wallInsp.submittedAt || wallInsp.createdAt) : null,
           wallStatus,
           notOkCount,
           pendingCount,
