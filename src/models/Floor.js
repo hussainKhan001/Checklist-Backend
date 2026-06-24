@@ -7,6 +7,10 @@ const floorSchema = new mongoose.Schema({
   order: { type: Number, default: 0 },
   isProjectLevel: { type: Boolean, default: false },
   mapImage: String,
+  maps: [{
+    name: { type: String, required: true },
+    url: { type: String, required: true }
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Floor', floorSchema);

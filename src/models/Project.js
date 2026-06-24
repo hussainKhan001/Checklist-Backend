@@ -6,6 +6,10 @@ const projectSchema = new mongoose.Schema({
   description: String,
   mapImage:    String,
   isHidden:    { type: Boolean, default: false },
+  maps: [{
+    name: { type: String, required: true },
+    url: { type: String, required: true }
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Project', projectSchema);
