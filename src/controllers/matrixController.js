@@ -34,14 +34,9 @@ function computeCellStatus(elements, inspections, checkpoints) {
     ins.results && ins.results.some(r => r.result === 'PENDING')
   );
 
-  // photoRequired checkpoints where photo is missing
-  const requiredCpIds = checkpoints
-    .filter(cp => cp.photoRequired === true)
-    .map(cp => cp._id.toString());
-
-  const photoMissing = requiredCpIds.length > 0 && inspections.some(ins =>
+  const photoMissing = inspections.some(ins =>
     ins.results && ins.results.some(r =>
-      requiredCpIds.includes(r.checkPointId?.toString()) &&
+      r.result === 'OK' &&
       (!r.photos || r.photos.length === 0)
     )
   );
@@ -162,9 +157,8 @@ exports.getMatrix = asyncHandler(async (req, res) => {
           notOkCount = results.filter(r => r.result === 'NOT_OK').length;
           pendingCount = results.filter(r => r.result === 'PENDING').length;
 
-          const reqIds = tradeCps.filter(cp => cp.photoRequired).map(cp => String(cp._id));
           photoMissingCount = results.filter(r =>
-            reqIds.includes(String(r.checkPointId)) &&
+            r.result === 'OK' &&
             (!r.photos || r.photos.length === 0)
           ).length;
 
