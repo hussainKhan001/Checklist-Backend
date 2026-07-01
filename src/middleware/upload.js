@@ -13,13 +13,11 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
     const isPdf    = file.mimetype === 'application/pdf'
-    const baseName = path.parse(file.originalname).name
+    const safeName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60)
     return {
       folder: 'neoteric-site-qc',
       resource_type: isPdf ? 'raw' : 'image',
-      // Keep .pdf in the public_id so the CDN URL ends in .pdf
-      // This lets browsers detect the type and download with correct extension
-      ...(isPdf ? { public_id: `${baseName}.pdf` } : {}),
+      ...(isPdf ? { public_id: `${safeName}.pdf` } : {}),
       allowed_formats: isPdf ? ['pdf'] : ['jpg', 'jpeg', 'png', 'webp'],
       ...(isPdf ? {} : { transformation: [{ quality: 'auto', fetch_format: 'auto' }] }),
     }

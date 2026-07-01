@@ -3,6 +3,7 @@ const admin    = require('../controllers/adminController');
 const roles    = require('../controllers/roleController');
 const matrix   = require('../controllers/matrixController');
 const progress = require('../controllers/progressController');
+const contractorReports = require('../controllers/contractorReportController');
 
 // Inline permission guard — uses req.can() attached by auth middleware
 const can = (perm) => (req, res, next) => {
@@ -77,6 +78,10 @@ router.get('/roles',        can('manage_roles'),  roles.getRoles);
 router.post('/roles',       can('manage_roles'),  roles.createRole);
 router.put('/roles/:id',    can('manage_roles'),  roles.updateRole);
 router.delete('/roles/:id', can('manage_roles'),  roles.deleteRole);
+
+// ── Contractor Reports ────────────────────────────────────────────────────────
+router.get('/contractor-reports',        can('view_inspections'),   contractorReports.getAll);
+router.delete('/contractor-reports/:id', can('manage_inspections'), contractorReports.remove);
 
 // ── Site Progress ─────────────────────────────────────────────────────────────
 router.get('/progress/summary',           can('view_inspections'), progress.getSummary);

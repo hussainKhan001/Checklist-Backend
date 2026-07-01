@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const asyncHandler = require('../middleware/asyncHandler');
+const { clearRoleCache } = require('../middleware/auth');
 const Project = require('../models/Project');
 const Floor = require('../models/Floor');
 const Location = require('../models/Location');
@@ -9,6 +10,8 @@ const Trade = require('../models/Trade');
 const CheckPoint = require('../models/CheckPoint');
 const Inspection = require('../models/Inspection');
 const User = require('../models/User');
+
+const VALID_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'];
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 exports.getStats = asyncHandler(async (_req, res) => {
@@ -30,7 +33,8 @@ exports.getProjects = asyncHandler(async (_req, res) => {
 });
 
 exports.createProject = asyncHandler(async (req, res) => {
-  res.status(201).json(await Project.create(req.body));
+  const { name, type, description, mapImage, maps } = req.body;
+  res.status(201).json(await Project.create({ name, type, description, mapImage, maps }));
 });
 
 exports.updateProject = asyncHandler(async (req, res) => {
@@ -40,11 +44,16 @@ exports.updateProject = asyncHandler(async (req, res) => {
 });
 
 exports.deleteProject = asyncHandler(async (req, res) => {
-  await Project.findByIdAndDelete(req.params.id);
+  const pid = req.params.id;
+  const elementIds = await Element.find({ projectId: pid }).distinct('_id');
   await Promise.all([
-    Floor.deleteMany({ projectId: req.params.id }),
-    Location.deleteMany({ projectId: req.params.id }),
-    Inspection.deleteMany({ projectId: req.params.id }),
+    Project.findByIdAndDelete(pid),
+    Floor.deleteMany({ projectId: pid }),
+    Location.deleteMany({ projectId: pid }),
+    Element.deleteMany({ projectId: pid }),
+    TradeElement.deleteMany({ elementId: { $in: elementIds } }),
+    CheckPoint.deleteMany({ projectId: pid }),
+    Inspection.deleteMany({ projectId: pid }),
   ]);
   res.json({ message: 'Project deleted.' });
 });
@@ -56,7 +65,8 @@ exports.getFloors = asyncHandler(async (req, res) => {
 });
 
 exports.createFloor = asyncHandler(async (req, res) => {
-  res.status(201).json(await Floor.create(req.body));
+  const { projectId, code, label, order, isProjectLevel, mapImage, maps } = req.body;
+  res.status(201).json(await Floor.create({ projectId, code, label, order, isProjectLevel, mapImage, maps }));
 });
 
 exports.updateFloor = asyncHandler(async (req, res) => {
@@ -66,9 +76,15 @@ exports.updateFloor = asyncHandler(async (req, res) => {
 });
 
 exports.deleteFloor = asyncHandler(async (req, res) => {
-  await Floor.findByIdAndDelete(req.params.id);
-  await Location.deleteMany({ floorId: req.params.id });
-  await Element.deleteMany({ floorId: req.params.id });
+  const fid = req.params.id;
+  const elementIds = await Element.find({ floorId: fid }).distinct('_id');
+  await Promise.all([
+    Floor.findByIdAndDelete(fid),
+    Location.deleteMany({ floorId: fid }),
+    Element.deleteMany({ floorId: fid }),
+    TradeElement.deleteMany({ elementId: { $in: elementIds } }),
+    Inspection.deleteMany({ floorId: fid }),
+  ]);
   res.json({ message: 'Floor deleted.' });
 });
 
@@ -79,7 +95,8 @@ exports.getLocations = asyncHandler(async (req, res) => {
 });
 
 exports.createLocation = asyncHandler(async (req, res) => {
-  res.status(201).json(await Location.create(req.body));
+  const { floorId, projectId, name, type } = req.body;
+  res.status(201).json(await Location.create({ floorId, projectId, name, type }));
 });
 
 exports.updateLocation = asyncHandler(async (req, res) => {
@@ -89,8 +106,14 @@ exports.updateLocation = asyncHandler(async (req, res) => {
 });
 
 exports.deleteLocation = asyncHandler(async (req, res) => {
-  await Location.findByIdAndDelete(req.params.id);
-  await Element.deleteMany({ locationId: req.params.id });
+  const lid = req.params.id;
+  const elementIds = await Element.find({ locationId: lid }).distinct('_id');
+  await Promise.all([
+    Location.findByIdAndDelete(lid),
+    Element.deleteMany({ locationId: lid }),
+    TradeElement.deleteMany({ elementId: { $in: elementIds } }),
+    Inspection.deleteMany({ locationId: lid }),
+  ]);
   res.json({ message: 'Location deleted.' });
 });
 
@@ -101,7 +124,8 @@ exports.getElements = asyncHandler(async (req, res) => {
 });
 
 exports.createElement = asyncHandler(async (req, res) => {
-  res.status(201).json(await Element.create(req.body));
+  const { locationId, floorId, projectId, name, type, order } = req.body;
+  res.status(201).json(await Element.create({ locationId, floorId, projectId, name, type, order }));
 });
 
 exports.updateElement = asyncHandler(async (req, res) => {
@@ -111,12 +135,16 @@ exports.updateElement = asyncHandler(async (req, res) => {
 });
 
 exports.deleteElement = asyncHandler(async (req, res) => {
-  const elementTrades = await Trade.find({ elementId: req.params.id }, '_id').lean();
+  const eid = req.params.id;
+  const elementTrades = await Trade.find({ elementId: eid }, '_id').lean();
   const tradeIds = elementTrades.map(t => t._id);
-  if (tradeIds.length) await CheckPoint.deleteMany({ tradeId: { $in: tradeIds } });
-  await Trade.deleteMany({ elementId: req.params.id });
-  await TradeElement.deleteMany({ elementId: req.params.id });
-  await Element.findByIdAndDelete(req.params.id);
+  await Promise.all([
+    tradeIds.length ? CheckPoint.deleteMany({ tradeId: { $in: tradeIds } }) : Promise.resolve(),
+    Trade.deleteMany({ elementId: eid }),
+    TradeElement.deleteMany({ elementId: eid }),
+    Inspection.deleteMany({ elementId: eid }),
+    Element.findByIdAndDelete(eid),
+  ]);
   res.json({ message: 'Element deleted.' });
 });
 
@@ -132,14 +160,15 @@ exports.getTradeElements = asyncHandler(async (req, res) => {
   }
   const items = await TradeElement.find(query)
     .populate({ path: 'elementId', populate: [{ path: 'locationId', select: 'name' }, { path: 'floorId', select: 'label' }, { path: 'projectId', select: 'name' }] })
-    .populate('tradeId', 'name')
+    .populate('tradeId', 'name color')
     .sort({ createdAt: 1 })
     .lean();
   res.json(items);
 });
 
 exports.createTradeElement = asyncHandler(async (req, res) => {
-  const te = await TradeElement.create(req.body);
+  const { tradeId, elementId } = req.body;
+  const te = await TradeElement.create({ tradeId, elementId });
   res.status(201).json(te);
 });
 
@@ -157,7 +186,8 @@ exports.getTrades = asyncHandler(async (req, res) => {
 });
 
 exports.createTrade = asyncHandler(async (req, res) => {
-  res.status(201).json(await Trade.create(req.body));
+  const { name, isHoldPoint, whyItMatters, isPending, isHidden, isRecurring, order, color, elementId } = req.body;
+  res.status(201).json(await Trade.create({ name, isHoldPoint, whyItMatters, isPending, isHidden, isRecurring, order, color, elementId }));
 });
 
 exports.updateTrade = asyncHandler(async (req, res) => {
@@ -167,9 +197,12 @@ exports.updateTrade = asyncHandler(async (req, res) => {
 });
 
 exports.deleteTrade = asyncHandler(async (req, res) => {
-  await Trade.findByIdAndDelete(req.params.id);
-  await CheckPoint.deleteMany({ tradeId: req.params.id });
-  await TradeElement.deleteMany({ tradeId: req.params.id });
+  await Promise.all([
+    Trade.findByIdAndDelete(req.params.id),
+    CheckPoint.deleteMany({ tradeId: req.params.id }),
+    TradeElement.deleteMany({ tradeId: req.params.id }),
+    Inspection.deleteMany({ tradeId: req.params.id }),
+  ]);
   res.json({ message: 'Trade deleted.' });
 });
 
@@ -178,12 +211,13 @@ exports.getCheckPoints = asyncHandler(async (req, res) => {
   const query = {};
   if (req.query.tradeId)   query.tradeId   = req.query.tradeId;
   if (req.query.projectId) query.projectId = req.query.projectId;
-  else                     query.projectId = null; // default: show global checkpoints
+  else                     query.projectId = null;
   res.json(await CheckPoint.find(query).populate('tradeId', 'name').sort({ order: 1 }).lean());
 });
 
 exports.createCheckPoint = asyncHandler(async (req, res) => {
-  res.status(201).json(await CheckPoint.create(req.body));
+  const { projectId, tradeId, order, title, standard, howToCheck, photoRequired, isHidden } = req.body;
+  res.status(201).json(await CheckPoint.create({ projectId, tradeId, order, title, standard, howToCheck, photoRequired, isHidden }));
 });
 
 exports.updateCheckPoint = asyncHandler(async (req, res) => {
@@ -201,7 +235,11 @@ exports.deleteCheckPoint = asyncHandler(async (req, res) => {
 exports.getInspections = asyncHandler(async (req, res) => {
   const { status, projectId, floorId, locationId, tradeId, includeResults } = req.query;
   const query = {};
-  if (status)     query.status     = status;
+  if (status) {
+    if (!VALID_STATUSES.includes(status))
+      return res.status(400).json({ message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+    query.status = status;
+  }
   if (projectId)  query.projectId  = projectId;
   if (floorId)    query.floorId    = floorId;
   if (locationId) query.locationId = locationId;
@@ -281,29 +319,42 @@ exports.rejectInspection = asyncHandler(async (req, res) => {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 exports.getUsers = asyncHandler(async (_req, res) => {
-  res.json(await User.find().sort({ createdAt: -1 }).lean());
+  res.json(await User.find().select('name email role avatar createdAt').sort({ createdAt: -1 }).lean());
 });
 
 exports.createUser = asyncHandler(async (req, res) => {
-  const user = await User.create(req.body);
+  const { name, email, password, role } = req.body;
+  const user = await User.create({ name, email, password, role });
   res.status(201).json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
 });
 
 exports.updateUser = asyncHandler(async (req, res) => {
-  const updates = { ...req.body };
-  if (updates.password) {
-    updates.password = await bcrypt.hash(updates.password, parseInt(process.env.BCRYPT_ROUNDS) || 12);
-  } else {
-    delete updates.password;
+  const { name, email, password, role, avatar } = req.body;
+  const updates = { name, email, avatar };
+
+  if (password) {
+    updates.password = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS) || 12);
   }
-  // Normalize role to array (findByIdAndUpdate bypasses Mongoose setters)
-  if (updates.role !== undefined) {
-    const arr = Array.isArray(updates.role) ? updates.role : [updates.role];
-    updates.role = [...new Set(arr.map(r => String(r).toLowerCase().trim()).filter(Boolean))];
-    if (updates.role.length === 0) updates.role = ['user'];
+
+  if (role !== undefined) {
+    const arr = Array.isArray(role) ? role : [role];
+    const normalized = [...new Set(arr.map(r => String(r).toLowerCase().trim()).filter(Boolean))];
+    updates.role = normalized.length ? normalized : ['user'];
+
+    // Privilege escalation guard: only admin can grant the admin role
+    const callerRoles = req.user?.role || [];
+    const isAdmin = callerRoles.includes('admin');
+    if (!isAdmin && updates.role.includes('admin')) {
+      return res.status(403).json({ message: 'Only admins can grant the admin role.' });
+    }
   }
+
   const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
   if (!user) return res.status(404).json({ message: 'User not found.' });
+
+  // Invalidate permission cache so new role takes effect immediately
+  if (updates.role) updates.role.forEach(r => clearRoleCache(r));
+
   res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
 });
 

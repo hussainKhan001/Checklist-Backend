@@ -33,6 +33,9 @@ exports.getOne = asyncHandler(async (req, res) => {
 exports.create = asyncHandler(async (req, res) => {
   const doc = {
     ...req.body,
+    status: 'DRAFT',
+    submittedAt: null,
+    approvedAt: null,
     timeline: [{
       event: 'DRAFT_CREATED',
       timestamp: new Date(),
@@ -55,8 +58,9 @@ exports.update = asyncHandler(async (req, res) => {
 exports.submit = asyncHandler(async (req, res) => {
   const inspection = await Inspection.findById(req.params.id);
   if (!inspection) return res.status(404).json({ message: 'Inspection not found.' });
+  if (inspection.status === 'SUBMITTED')
+    return res.status(409).json({ message: 'Already submitted.' });
 
-  // Apply any last-minute body fields (e.g. final results)
   Object.assign(inspection, req.body);
   inspection.status      = 'SUBMITTED';
   inspection.submittedAt = new Date();
@@ -99,6 +103,7 @@ exports.submit = asyncHandler(async (req, res) => {
 exports.getDraft = asyncHandler(async (req, res) => {
   const { locationId, tradeId, elementId, date } = req.query;
   if (!locationId || !tradeId || !date) return res.json({ found: false });
+  if (isNaN(new Date(date).getTime())) return res.status(400).json({ message: 'Invalid date.' });
 
   const start = new Date(date); start.setUTCHours(0, 0, 0, 0);
   const end   = new Date(date); end.setUTCHours(23, 59, 59, 999);
@@ -117,9 +122,10 @@ exports.getDraft = asyncHandler(async (req, res) => {
 exports.checkDuplicate = asyncHandler(async (req, res) => {
   const { locationId, tradeId, elementId, date } = req.query;
   if (!locationId || !tradeId || !date) return res.json({ exists: false });
+  if (isNaN(new Date(date).getTime())) return res.status(400).json({ message: 'Invalid date.' });
 
-  const start = new Date(date); start.setHours(0, 0, 0, 0);
-  const end   = new Date(date); end.setHours(23, 59, 59, 999);
+  const start = new Date(date); start.setUTCHours(0, 0, 0, 0);
+  const end   = new Date(date); end.setUTCHours(23, 59, 59, 999);
 
   const query = { locationId, tradeId, status: 'SUBMITTED', dateOfCheck: { $gte: start, $lte: end } };
   if (elementId) query.elementId = elementId;

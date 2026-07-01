@@ -34,7 +34,8 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 // FRONTEND_URL can be comma-separated: "http://localhost:5173,https://app.vercel.app"
 // cors `origin` must be a function â€” passing the raw string sends ALL values in one
 // header which browsers reject (Access-Control-Allow-Origin only allows one value).
-const allowedOrigins = (process.env.FRONTEND_URL || 'https://checklist-backend-1-6g7s.onrender.com')
+// const allowedOrigins = (process.env.FRONTEND_URL || 'https://checklist-backend-1-6g7s.onrender.com')
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5174')
   .split(',').map(o => o.trim().replace(/\/$/, ''));
 
 app.use(cors({
@@ -60,19 +61,29 @@ app.use(mongoSanitize());
 // â”€â”€ Rate limits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 600,
+  max: 200,
   message: { message: 'Too many requests. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { message: 'Too many login attempts. Try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
 });
 
 // â”€â”€ Static uploads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // â”€â”€ Health check (also handles GET / for hosting-platform probes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-app.get(['/', '/health'], (_req, res) => res.json({ status: 'ok', app: 'Neoteric QC API', env: process.env.NODE_ENV || 'development' }));
+app.get(['/', '/health'], (_req, res) => res.json({ status: 'ok', app: 'Neoteric QC API' }));
 
 // â”€â”€ API routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/projects', apiLimiter, require('./src/routes/projects'));
 app.use('/api/floors', apiLimiter, require('./src/routes/floors'));
@@ -83,6 +94,9 @@ app.use('/api/trades', apiLimiter, require('./src/routes/trades'));
 app.use('/api/checkpoints', apiLimiter, require('./src/routes/checkpoints'));
 app.use('/api/inspections', apiLimiter, require('./src/routes/inspections'));
 app.use('/api/uploads', apiLimiter, require('./src/routes/uploads'));
+app.use('/api/contractor-reports', apiLimiter, require('./src/routes/contractorReports'));
+app.use('/api/drawing-requests',   apiLimiter, require('./src/routes/drawingRequests'));
+app.use('/api/site-reports',       apiLimiter, require('./src/routes/dailySiteReports'));
 
 const authMiddleware = require('./src/middleware/auth');
 app.use('/api/admin', authMiddleware, require('./src/routes/admin'));
