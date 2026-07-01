@@ -34,8 +34,8 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 // FRONTEND_URL can be comma-separated: "http://localhost:5173,https://app.vercel.app"
 // cors `origin` must be a function â€” passing the raw string sends ALL values in one
 // header which browsers reject (Access-Control-Allow-Origin only allows one value).
-// const allowedOrigins = (process.env.FRONTEND_URL || 'https://checklist-backend-1-6g7s.onrender.com')
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5174')
+const allowedOrigins = (process.env.FRONTEND_URL || 'https://checklist-frontend-jade.vercel.app')
+// const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5174')
   .split(',').map(o => o.trim().replace(/\/$/, ''));
 
 app.use(cors({
